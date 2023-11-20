@@ -218,6 +218,18 @@ struct GemmPreferenceKey {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
+inline
+std::ostream& operator<< (std::ostream& out, const cutlass::library::GemmPreferenceKey& key) {
+    out << "{\n"
+      << "compute_capability : " << key.compute_capability << std::endl
+      << "alignment          : " << key.alignment << std::endl
+      << "}";
+
+  return out;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// Maps minimum compute capability onto a vector of possible operations
 using GemmOperationVectorMap = std::map<
   GemmPreferenceKey,
@@ -230,7 +242,6 @@ using GemmOperationFunctionalMap = std::unordered_map<
   GemmOperationVectorMap,
   GemmFunctionalKeyHasher
 >;
-/////////////////////////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //                          Data Structures for Conv Functional Maps

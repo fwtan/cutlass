@@ -51,19 +51,19 @@
         plan.run([A0, A1], [B0, B1], [C0, C1], [D0, D1])
 """
 
-import cutlass_bindings
+from cutlass_library import DataTypeSize
 
 from cutlass.backend.gemm_operation import (
     GemmGroupedArguments,
     GemmOperationGrouped,
 )
 from cutlass.backend.library import (
-    DataTypeSize,
     SchedulerMode,
     TensorDescription,
     TileDescription,
 )
 from cutlass.op.gemm import Gemm
+from cutlass.shape import GemmCoord
 from cutlass.utils import check, datatypes
 
 
@@ -163,31 +163,18 @@ class GroupedGemm(Gemm):
         :return: operation that was constructed
         :rtype: cutlass.backend.GemmOperationGrouped
         """
-        alignment_preference = max(self.possible_operations.alignments)
-        alignment_A = check.alignment_or_default(alignment_A, alignment_preference)
-        alignment_B = check.alignment_or_default(alignment_B, alignment_preference)
-        alignment_C = check.alignment_or_default(alignment_C, alignment_preference)
+        alignment_A = check.alignment_or_default(alignment_A, max(self.possible_operations.alignments("A")))
+        alignment_B = check.alignment_or_default(alignment_B, max(self.possible_operations.alignments("B")))
+        alignment_C = check.alignment_or_default(alignment_C, max(self.possible_operations.alignments("C")))
 
-        self._reset_epilogue_functor_alignment(alignment_C)
+        self.epilogue_functor = self._reset_epilogue_functor_alignment(alignment_C, self.epilogue_functor)
 
-        tensor_A = TensorDescription(
-            datatypes.binding_type(self._element_a),
-            datatypes.binding_layout(self._layout_a),
-            alignment_A
-        )
-        tensor_B = TensorDescription(
-            datatypes.binding_type(self._element_b),
-            datatypes.binding_layout(self._layout_b),
-            alignment_B
-        )
-        tensor_C = TensorDescription(
-            datatypes.binding_type(self._element_c),
-            datatypes.binding_layout(self._layout_c),
-            alignment_C
-        )
+        tensor_A = TensorDescription(self._element_a, self._layout_b, alignment_A)
+        tensor_B = TensorDescription(self._element_b, self._layout_b, alignment_B)
+        tensor_C = TensorDescription(self._element_c, self._layout_c, alignment_C)
 
         if tile_description is None:
-            op = self.possible_operations.operations(alignment_A)[0]
+            op = self.possible_operations.operations(alignment_A, alignment_B, alignment_C)[0]
             tile_description = datatypes.td_from_profiler_op(op)
         else:
             valid, err_str = self._valid_tile_description(tile_description)
@@ -234,6 +221,8 @@ class GroupedGemm(Gemm):
         :return: arguments passed in to the kernel
         :rtype: cutlass.backend.GemmGroupedArguments
         """
+        super().run_setup()
+
         if len(A) != len(B) or len(A) != len(C) or len(A) != len(D):
             raise Exception("Lengths of A, B, C, and D lists must be equal")
 
@@ -244,14 +233,14 @@ class GroupedGemm(Gemm):
             Bs[i] = self._verify_tensor(B[i], self.B, self._element_b, self._layout_b, "B")
             Cs[i] = self._verify_tensor(C[i], self.C, self._element_c, self._layout_c, "C")
             Ds[i] = self._verify_tensor(D[i], self.D, self._element_d, self._layout_d, "D")
-            problem_sizes.append(cutlass_bindings.gemm.GemmCoord(A[i].shape[0], B[i].shape[1], A[i].shape[1]))
+            problem_sizes.append(GemmCoord(A[i].shape[0], B[i].shape[1], A[i].shape[1]))
 
         alpha = self._verify_scalar(alpha, self.alpha, self._element_c, "alpha")
         beta = self._verify_scalar(beta, self.beta, self._element_c, "beta")
 
-        alignment_a = min((self.possible_operations.find_alignment(A.shape, self._layout_a) for A in As))
-        alignment_b = min((self.possible_operations.find_alignment(B.shape, self._layout_b) for B in Bs))
-        alignment_c = min((self.possible_operations.find_alignment(C.shape, self._layout_c) for C in Cs))
+        alignment_a = min((self.possible_operations.find_alignment(A.shape, self._layout_a, operand="A") for A in As))
+        alignment_b = min((self.possible_operations.find_alignment(B.shape, self._layout_b, operand="B") for B in Bs))
+        alignment_c = min((self.possible_operations.find_alignment(C.shape, self._layout_c, operand="C") for C in Cs))
         self.compile(self.tile_description, alignment_A=alignment_a, alignment_B=alignment_b,
                      alignment_C=alignment_c, print_module=print_module)
 

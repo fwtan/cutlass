@@ -1,8 +1,8 @@
 ![ALT](/media/images/gemm-hierarchy-with-epilogue-no-labels.png "Complete CUDA GEMM decomposition")
 
-# CUTLASS 3.1
+# CUTLASS 3.3
 
-_CUTLASS 3.1 - April 2023_
+_CUTLASS 3.3 - October 2023_
 
 CUTLASS is a collection of CUDA C++ template abstractions for implementing
 high-performance matrix-matrix multiplication (GEMM) and related computations at all levels 
@@ -41,34 +41,17 @@ and improves code composability and readability. More documentation specific to 
 
 In addition to GEMMs, CUTLASS implements high-performance convolution via the implicit GEMM algorithm. Implicit GEMM is the formulation of a convolution operation as a GEMM thereby taking advantage of CUTLASS's modular GEMM pipeline. This allows CUTLASS to build convolutions by reusing highly-optimized GEMM components.
 
-# What's New in CUTLASS 3.1
+# What's New in CUTLASS 3.3
 
-CUTLASS 3.1 is an update to CUTLASS adding:
+CUTLASS 3.3.0 is an update to CUTLASS adding:
 
-- New CUTLASS Python interface that aims to provide an ease-of-use interface for instantiating, emitting, compiling, and running CUTLASS kernels via Python. More details [here](/python/README.md) and new [examples](/examples/python).
-- New [efficient epilogues](test/unit/gemm/device/sm90_gemm_f16_f16_f16_tensor_op_f32_cluster_warpspecialized_cooperative.cu#L783) using TMA for Hopper.
-- Support for [fused epilogues](test/unit/gemm/device/sm90_gemm_f16_f16_f16_tensor_op_f32_cluster_warpspecialized_cooperative_bias_elementwise.cu), such Bias, ReLU and GELU, using the new efficient epilogues.
-- New [warp-specialized TensorFloat-32 (TF32) GEMM kernels](test/unit/gemm/device/sm90_gemm_tf32_tf32_f32_tensor_op_f32_gmma_rs_cluster_warpspecialized.cu) targeting Hopper TMA.
-- New [*warp-specialized persistent cooperative*](include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_cooperative.hpp) kernel design that improves performance on Hopper.
-- An [example](examples/51_hopper_gett) showcasing GEMM-Like Tensor-Tensor Contraction (GETT) capability on Hopper.
-- New Epilogue builders. Similar to mainloop builders (see [example 49](/examples/49_hopper_gemm_with_collective_builder/49_collective_builder.cu)), epilogue builders aim to generate the best-possible epilogue while exposing incremental opt-ins for greater customization.
-- Profiler support for overriding kernel and epilogue builder auto schedules for 3.x API kernels, allowing specific policies to be run in the CUTLASS profiler.
-- Changes to the [GEMM API 3.x](media/docs/gemm_api_3x.md), involving the host-facing arguments and the underlying `Params` structs.
-- [FMHA Backward Pass](examples/41_fused_multi_head_attention/fused_multi_head_attention_backward.cu) from Meta xFormers.
-- [Streamk GEMM with Broadcast](examples/47_ampere_gemm_universal_streamk/ampere_gemm_universal_streamk_broadcast.cu) enables epilogue broadcast with StreamK GEMM.
-- [Batched B2B GEMM](examples/13_two_tensor_op_fusion) now can run multiple Back-to-Back GEMM with the same problem size in parallel.
-- [Batched Strided GEMV](test/unit/gemm/device/gemv.cu) support both row major and column major input matrix.
-- [Permute + GEMM fusion](examples/39_gemm_permute) can fuse Permute with following GEMM now.  Before, we only support fusing GEMM with Permute in the epilogue.
-- [Row Broadcast](include/cutlass/epilogue/threadblock/predicated_tile_iterator_row_broadcast.h) can be fused in the epilogue.
-
-- *Announcement*:
-  - The GitHub branch is renamed from `master` to `main` in this release.
-  - A slight modification has been made to the ordering of arguments passed in to epilogues in 3.x kernels.
-    Existing CUTLASS 3.x kernel invocations will need to be modified to reflect this change. 2.x kernels
-    remain unaffected. See [#890](https://github.com/NVIDIA/cutlass/issues/890) for additional information.
-  - The CUTLASS Python interface supersedes PyCUTLASS. PyCUTLASS has been moved to [/python/cutlass/backend](/python/cutlass/backend).
-    Backward compatibility between the Python interface and PyCUTLASS will not be maintained moving forward.
-
+- New [Mixed-input Hopper GEMMs](/examples/55_hopper_mixed_dtype_gemm) support covering 16-bit x 8-bit input types with optimal performance.
+- New [Mixed-input Ampere GEMMs](https://github.com/NVIDIA/cutlass/pull/1084) with support for canonical layouts (TN). The implementation supports upcast on operandB {fp16, bf16} x {s8, u8} and upcast on operandA {s8, u8} x {fp16, bf16}. They also include fast numeric conversion recipes and warp level shuffles to achieve optimal performance.
+- New [Copy Async based Hopper GEMMs](/test/unit/gemm/device/sm90_gemm_bf16_bf16_bf16_alignx_tensor_op_f32_warpspecialized_cooperative.cu) - which support lower than 16B aligned input tensors (across s8/fp8/fp16/bf16/tf32 types) with optimal performance. As a part of this, new kernel schedules, and Copy Ops [SM80\_CP\_ASYNC\_CACHE\_\*](/include/cute/arch/copy_sm80.hpp) were also added.
+- EVT Support for RELU with Aux bitmap tensor store (used in dRELU). See [SM90 EVT fusions](/include/cutlass/epilogue/fusion/sm90_visitor_compute_tma_warpspecialized.hpp) for details.
+- Various subbyte enhancements like tagged device ptrs, support for vectorized copy, various operators to treat subbyte iterators as pointers, and full-fledged CuTe Tensor support.
+- Support for Clang as a host compiler.
+- Support for void-C kernels and SM80 mixed-input GEMMs in the CUTLASS Python interface.
 
 Minimum requirements:
 
@@ -111,8 +94,8 @@ as shown in the above figure.  Tensor Core operations are implemented using CUDA
 # Compatibility
 
 CUTLASS requires a C++17 host compiler and 
-performs best when built with the [**CUDA 12.1 Toolkit**](https://developer.nvidia.com/cuda-toolkit).
-It is also compatible with CUDA 11.4, CUDA 11.5, CUDA 11.6, CUDA 11.7, CUDA 11.8, and CUDA 12.0.
+performs best when built with the [**CUDA 12.2.2 Toolkit**](https://developer.nvidia.com/cuda-toolkit-archive).
+It is also compatible with CUDA 11.4, CUDA 11.5, CUDA 11.6, CUDA 11.7, CUDA 11.8, CUDA 12.0 and CUDA 12.1.
 
 ## Operating Systems
 We have tested the following environments.
@@ -122,8 +105,10 @@ We have tested the following environments.
 | Ubuntu 18.04 | GCC 7.5.0  |
 | Ubuntu 20.04 | GCC 10.3.0 |
 | Ubuntu 22.04 | GCC 11.2.0 |
+| Ubuntu 22.04 | Clang 10.0.0 |
+| Ubuntu 22.04 | Clang 14.0.6 |
+| Windows 10.0 | Visual Studio 2019 v16.11.27 |
 
-Note: We plan to add Windows (MSVC) & Clang compiler support soon.
 Note: GCC 8.5.0 has known regressions regarding fold expressions and overloaded operators. Using GCC 7.5.0 or (preferred) GCC >= 9 is recommended.
 
 ## Hardware
@@ -191,7 +176,8 @@ CUTLASS is a header-only template library and does not need to be built to be us
 projects. Client applications should target CUTLASS's `include/` directory in their include
 paths.
 
-CUTLASS unit tests, examples, and utilities can be build with CMake starting version 3.12. 
+CUTLASS unit tests, examples, and utilities can be build with CMake.
+The minimum version of CMake is given in the [Quickstart guide](media/docs/quickstart.md).
 Make sure the `CUDACXX` environment  variable points to NVCC in the CUDA Toolkit installed
 on your system.
 
@@ -527,7 +513,7 @@ reference_device: Passed
 ## More Details on Compiling CUTLASS Kernels and CUTLASS Profiler
 - Please follow the links for more CMake examples on selectively compiling CUTLASS kernels:
   - [GEMM CMake Examples](media/docs/quickstart.md#gemm-cmake-examples) 
-  - [Implicit GEMM conovlution CMake Examples](media/docs/quickstart.md#convolution-cmake-examples)
+  - [Implicit GEMM convolution CMake Examples](media/docs/quickstart.md#convolution-cmake-examples)
 - [Further details about the CUTLASS Profiler are described here.](media/docs/profiler.md)
 
 

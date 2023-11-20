@@ -331,7 +331,7 @@ class gen_Kernel:
             operator_code += "    " + helper.var_idx("FusedAddBiasEpilogue", i ) + helper.var_idx(" epilogue_", i ) + ";\n"
 
 
-        operator_code += "    " + "int warp_idx = __shfl_sync(0x1f, threadIdx.x / 32, 0);\n"
+        operator_code += "    " + "int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);\n"
         operator_code += "    " + "int lane_idx = threadIdx.x % 32;\n"
 
         for i in range (self.b2bnum - 1):
@@ -444,7 +444,7 @@ class gen_kernel:
 
         self.gen_class_name = "B2bGemm"
         self.gen_kernel_name = gen_class_name + "Kernel"
-        self.tempalte_args = []
+        self.template_args = []
 
         self.cutlass_deps_root = cutlass_deps_root
         self.project_root = project_root

@@ -56,7 +56,7 @@ You may explicitly exclude cuBLAS and cuDNN as dependencies with the following C
 
 ## Build and run the CUTLASS Profiler
 
-From the `build/` directory created above, compile the the CUTLASS Profiler.
+From the `build/` directory created above, compile the CUTLASS Profiler.
 ```bash
 $ make cutlass_profiler -j12
 ```
@@ -425,10 +425,10 @@ int main(int argc, char const **args) {
   StrideC stride_C;
   StrideD stride_D;
 
-  stride_A = make_cute_packed_stride(StrideA{}, cute::make_shape(M, K, Int<1>{}));
-  stride_B = make_cute_packed_stride(StrideB{}, cute::make_shape(N, K, Int<1>{}));
-  stride_C = make_cute_packed_stride(StrideC{}, cute::make_shape(M, N, Int<1>{}));
-  stride_D = make_cute_packed_stride(StrideD{}, cute::make_shape(M, N, Int<1>{}));
+  stride_A = cutlass::make_cute_packed_stride(StrideA{}, cute::make_shape(M, K, Int<1>{}));
+  stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(N, K, Int<1>{}));
+  stride_C = cutlass::make_cute_packed_stride(StrideC{}, cute::make_shape(M, N, Int<1>{}));
+  stride_D = cutlass::make_cute_packed_stride(StrideD{}, cute::make_shape(M, N, Int<1>{}));
 
   block_A.reset(M * K);
   block_B.reset(K * N);

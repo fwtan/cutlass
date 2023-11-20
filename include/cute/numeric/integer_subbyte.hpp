@@ -36,6 +36,8 @@
 #include <cstdint>
 #endif
 
+#include <cutlass/integer_subbyte.h>
+
 #include <cute/config.hpp>
 #include <cute/util/type_traits.hpp>
 
@@ -111,7 +113,7 @@ struct integer_subbyte
     if (sign_mask_ & storage) {
       return !(rhs.storage < storage);
     } else {
-      return storage < rhs.storage;
+      return storage <= rhs.storage;
     }
   }
 

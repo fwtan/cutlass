@@ -34,13 +34,7 @@ from cuda import cuda
 import numpy as np
 
 from cutlass.backend.memory_manager import device_mem_alloc, todevice
-from cutlass.backend.utils.software import CheckPackages
-
-if CheckPackages().check_torch():
-    import torch
-
-if CheckPackages().check_cupy():
-    import cupy as cp
+from cutlass.utils.datatypes import is_cupy_tensor, is_numpy_tensor, is_torch_tensor
 
 
 class NumpyFrontend:
@@ -94,3 +88,20 @@ class CupyFrontend:
     @staticmethod
     def argument(cupy_ndarray: "cp.ndarray"):
         return cuda.CUdeviceptr(int(cupy_ndarray.data.ptr))
+
+
+class TensorFrontend:
+    """
+    Universal Frontend for client-provide tensors
+    """
+
+    @staticmethod
+    def argument(tensor, is_output=False):
+        if is_numpy_tensor(tensor):
+            return NumpyFrontend.argument(tensor, is_output)
+        elif is_torch_tensor(tensor):
+            return TorchFrontend.argument(tensor)
+        elif is_cupy_tensor(tensor):
+            return CupyFrontend.argument(tensor)
+        else:
+            raise NotImplementedError("Unknown Tensor Type")
