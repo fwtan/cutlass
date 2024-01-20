@@ -1,6 +1,6 @@
 #################################################################################################
 #
-# Copyright (c) 2023 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -53,6 +53,7 @@
 
 from cutlass_library import DataTypeSize
 
+from cuda import cuda
 from cutlass.backend.gemm_operation import (
     GemmGroupedArguments,
     GemmOperationGrouped,
@@ -174,7 +175,7 @@ class GroupedGemm(Gemm):
         tensor_C = TensorDescription(self._element_c, self._layout_c, alignment_C)
 
         if tile_description is None:
-            op = self.possible_operations.operations(alignment_A, alignment_B, alignment_C)[0]
+            op = self.possible_operations.operations(alignment_A, alignment_B, alignment_C, self._math_operation)[0]
             tile_description = datatypes.td_from_profiler_op(op)
         else:
             valid, err_str = self._valid_tile_description(tile_description)
@@ -194,7 +195,8 @@ class GroupedGemm(Gemm):
 
     def run(self, A, B, C, D,
             alpha=None, beta=None, sync: bool = True,
-            print_module: bool = False) -> GemmGroupedArguments:
+            print_module: bool = False,
+            stream: cuda.CUstream = cuda.CUstream(0)) -> GemmGroupedArguments:
         """
         Runs the kernel currently specified.
 
@@ -217,6 +219,8 @@ class GroupedGemm(Gemm):
         :type sync: bool
         :param print_module: whether to print the emitted C++ code
         :type print_module: bool
+        :param stream: cuda stream, defaults to cuda.cuda.CUstream(0)
+        :type stream: :class:`cuda.cuda.CUstream`
 
         :return: arguments passed in to the kernel
         :rtype: cutlass.backend.GemmGroupedArguments
@@ -248,7 +252,8 @@ class GroupedGemm(Gemm):
             operation=self.operation,
             problem_sizes=problem_sizes,
             A=As, B=Bs, C=Cs, D=Ds,
-            output_op=self.operation.epilogue_type(alpha, beta)
+            output_op=self.operation.epilogue_type(alpha, beta),
+            stream=stream
         )
 
         self.operation.run(arguments)

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2023 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -145,6 +145,20 @@ TEST(FastNumericConversion, s32_to_f32) {
   using Source = int;
   using Destination = float;
   test::core::kernel::run_test_integer_range_limited<Destination, Source, kN>();
+}
+
+TEST(FastNumericConversion, s8_to_f32_array) {
+  int const kN = 256;
+  using Source = int8_t;
+  using Destination = float;
+  test::core::kernel::run_test_integer_range_all<Destination, Source, kN>();
+}
+
+TEST(FastNumericConversion, u8_to_f32_array) {
+  int const kN = 256;
+  using Source = uint8_t;
+  using Destination = float;
+  test::core::kernel::run_test_integer_range_all<Destination, Source, kN>();
 }
 
 TEST(FastNumericConversion, s8_to_f16_array) {

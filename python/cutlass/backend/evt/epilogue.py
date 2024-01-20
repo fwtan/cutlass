@@ -1,6 +1,6 @@
-################################################################################
+#################################################################################################
 #
-# Copyright (c) 2023 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved
+# Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
+#################################################################################################
 
 """
 Epilogue Visitor interface for compiling, and running visitor-based epilogue.
@@ -44,6 +44,7 @@ from cutlass.backend.epilogue import EpilogueFunctorBase
 import cutlass.backend.evt.backend
 from cutlass.backend.frontend import TensorFrontend
 from cutlass.utils.datatypes import is_numpy_tensor
+from cutlass.backend.evt.passes.util import cc_map
 
 
 class EpilogueFunctorVisitor(EpilogueFunctorBase):
@@ -56,7 +57,7 @@ class EpilogueFunctorVisitor(EpilogueFunctorBase):
     """
     def __init__(self, cc: int, visitor, element_compute=DataType.f32) -> None:
         # Type of Emitter based on CC
-        self.emit_cls = getattr(cutlass.backend.evt.backend, f"Sm{cc}Emitter")
+        self.emit_cls = getattr(cutlass.backend.evt.backend, f"Sm{cc_map[cc]}Emitter")
 
         # Visitor Types
         self.visitor = visitor

@@ -1,6 +1,6 @@
 #################################################################################################
 #
-# Copyright (c) 2017 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -56,11 +56,9 @@ class ArgumentBase:
         **kwargs,
     ) -> None:
         # tensor_C can be interpreted as the bias with bias=True in keyword args
-        if "bias" in kwargs.keys():
-            self.bias = kwargs["bias"]
-        else:
-            # by default, tensor_C is not bias
-            self.bias = False
+        self.bias = kwargs.get("bias", False)
+
+        self.stream = kwargs.get("stream", cuda.CUstream(0))
 
         # RMM buffers used to track tensor lifetime
         self.buffers = {}

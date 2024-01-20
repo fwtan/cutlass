@@ -1,6 +1,6 @@
 #################################################################################################
 #
-# Copyright (c) 2023 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -657,7 +657,10 @@ class _ArchListSetter:
         """
         Restores the old value of TORCH_CUDA_ARCH_LIST
         """
-        os.environ[_ArchListSetter._TORCH_CUDA_ARCH_LIST] = self.old_arch_list
+        if self.old_arch_list is None:
+            del os.environ[_ArchListSetter._TORCH_CUDA_ARCH_LIST]
+        else:
+            os.environ[_ArchListSetter._TORCH_CUDA_ARCH_LIST] = self.old_arch_list
 
 
 def _jit(name: str, cc: int, cpp_file: str, cuda_file: str):

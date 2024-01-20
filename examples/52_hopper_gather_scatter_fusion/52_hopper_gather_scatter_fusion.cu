@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -568,7 +568,7 @@ struct ExampleRunner
     if (options.reference_check) {
       if (!verify()) {
         std::cout << "Failed validation" << std::endl;
-#if 1
+#if 0
         debug_output(std::cout);
 #endif
         return false;

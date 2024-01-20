@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2017 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -79,6 +79,10 @@ class ReductionArguments:
         else:
             # by default, tensor_C is not bias
             self.bias = False
+        if "stream" in kwargs.keys():
+            self.stream = kwargs["stream"]
+        else:
+            self.stream = cuda.CUstream(0)
 
         self.operation = operation
         self.ptr_workspace = workspace
@@ -386,6 +390,7 @@ class ReductionOperation:
             host_workspace,
             device_workspace,
             launch_config,
+            arguments.stream
         )
 
         if err != cuda.CUresult.CUDA_SUCCESS:

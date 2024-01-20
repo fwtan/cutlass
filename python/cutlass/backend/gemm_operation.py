@@ -1,6 +1,6 @@
-################################################################################
+#################################################################################################
 #
-# Copyright (c) 2017 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-################################################################################
+#################################################################################################
 
 import copy
 import ctypes
@@ -82,7 +82,8 @@ from cutlass.backend.c_types import (
     get_gemm_arguments_3x,
     get_gemm_arguments_streamk,
     get_gemm_grouped_arguments,
-    get_mainloop_arguments_3x
+    get_mainloop_arguments_3x,
+    get_tile_scheduler_arguments_3x,
 )
 from cutlass.backend.library import (
     ApiVersion,
@@ -163,6 +164,9 @@ class GemmArguments2x(ArgumentBase):
 
     :param output_op: output operator, optional
     :type output_op: :class:`cutlass.backend.LinearCombinationFunctorArguments`
+
+    :param stream: cuda stream, defaults to cuda.cuda.CUstream(0)
+    :type stream: :class:`cuda.cuda.CUstream`
     """
 
     def __init__(self, operation, problem_size, A, B, C, D, gemm_mode=GemmUniversalMode.Gemm, **kwargs):
@@ -554,6 +558,7 @@ class GemmArguments3x(GemmArguments2x):
             mainloop,
             epilogue,
             hw_info,
+            self.operation.rt_module.scheduler_args
         )
         return self.arguments
 
@@ -664,6 +669,9 @@ class GemmGroupedArguments:
 
     :param output_op: output operator, optional
     :type output_op: :class:`cutlass.backend.LinearCombinationFunctorArguments`
+
+    :param stream: cuda stream, defaults to cuda.cuda.CUstream(0)
+    :type stream: :class:`cuda.cuda.CUstream`
     """
 
     def __init__(self, operation, problem_sizes, A, B, C, D, **kwargs):
@@ -703,6 +711,8 @@ class GemmGroupedArguments:
         self.total_tiles = 0
 
         self.gemm_arguments = []
+
+        self.stream = kwargs.get("stream", cuda.CUstream(0))
 
         # Process the input arguments
         for idx, problem_size in enumerate(problem_sizes):
@@ -1163,7 +1173,9 @@ extern "C" {
             operation.A.alignment,
             operation.B.alignment
         )
-        self.argument_type, self.epilogue_args, self.epilogue_type, self.hw_info = get_gemm_arguments_3x(self.mainloop_args, operation.epilogue_functor)
+        self.scheduler_args = get_tile_scheduler_arguments_3x(operation.tile_description.tile_scheduler)
+        self.argument_type, self.epilogue_args, self.epilogue_type, self.hw_info = get_gemm_arguments_3x(
+            self.mainloop_args, operation.epilogue_functor, self.scheduler_args)
 
     def get_device_workspace_size(self, arguments: GemmArguments3x):
         return self.get_kernel_workspace_size(ctypes.byref(arguments.get_arguments()))
@@ -1538,6 +1550,7 @@ class GemmOperationBase:
             arguments.host_workspace,
             arguments.device_workspace,
             arguments.launch_config,
+            arguments.stream
         )
 
         if err != cuda.CUresult.CUDA_SUCCESS:

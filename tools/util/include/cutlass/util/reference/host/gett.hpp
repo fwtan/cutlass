@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2023 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -77,6 +77,7 @@ struct GettMainloopParams {
 
   ComplexTransform transform_A = ComplexTransform::kNone;
   ComplexTransform transform_B = ComplexTransform::kNone;
+  
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,7 +94,8 @@ template<
   class VectorAlpha_ = TensorD_,                                                                           //    (M, 1)
   class VectorBeta_ = VectorAlpha_,                                                                        //    (M, 1)
   class ActivationFunctor_ = cutlass::epilogue::thread::Identity<ElementCompute_>,
-  class BiasBinaryOp_ = cutlass::plus<ElementCompute_>
+  class BiasBinaryOp_ = cutlass::plus<ElementCompute_>,
+  bool PerColumnBias_ = false
 >
 struct GettEpilogueParams {
   using ElementScalar = ElementScalar_;
@@ -114,6 +116,8 @@ struct GettEpilogueParams {
   using EngineD =  typename TensorD::engine_type;
   using LayoutD = typename TensorD::layout_type;
 
+  static constexpr bool PerColumnBias = PerColumnBias_;
+
   ElementScalar alpha = ElementScalar(1);
   ElementScalar beta = ElementScalar(0);
 
@@ -123,6 +127,7 @@ struct GettEpilogueParams {
   TensorAux Aux{};
   VectorAlpha Valpha{};
   VectorBeta Vbeta{};
+  ElementCompute st = ElementCompute(1);
 
   ElementAccumulator* abs_max_D = nullptr;
   ElementAccumulator* abs_max_Aux = nullptr;
@@ -201,6 +206,7 @@ void gett_mainloop(
       if (m + m_b < cute::size<0>(mainloop_params.A.layout())) {
         // Perform reference GEMM calculations at the accumulator's precision. Cast A value to accumulator type.
         a_frag[m_b] = static_cast<ElementAccumulator>(ElementA(mainloop_params.A(m + m_b, k, l)));
+        
         if (mainloop_params.transform_A == ComplexTransform::kConjugate) {
           a_frag[m_b] = conj(a_frag[m_b]);
         }
@@ -215,6 +221,7 @@ void gett_mainloop(
       if (n + n_b < cute::size<0>(mainloop_params.B.layout())) {
         // Perform reference GEMM calculations at the accumulator's precision. Cast A value to accumulator type.
         b_frag[n_b] = static_cast<ElementAccumulator>(ElementB(mainloop_params.B(n + n_b, k, l)));
+
         if (mainloop_params.transform_B == ComplexTransform::kConjugate) {
           b_frag[n_b] = conj(b_frag[n_b]);
         }
@@ -256,17 +263,22 @@ void gett_epilogue(
   using ActivationFunctor = typename EpilogueParams::ActivationFunctor;
   using BiasBinaryOp = typename EpilogueParams::BiasBinaryOp;
 
+  constexpr bool PerColBias = EpilogueParams::PerColumnBias;
+
   constexpr bool IsScalingAndAmaxOutputNeeded = 
-      std::is_same_v<ElementD, cutlass::float_e4m3_t> or
-      std::is_same_v<ElementD, cutlass::float_e5m2_t>;
+      cute::is_same_v<ElementD, cutlass::float_e4m3_t> or
+      cute::is_same_v<ElementD, cutlass::float_e5m2_t>;
 
   constexpr bool IsScalingAndAmaxAuxOutputNeeded =
-      std::is_same_v<ElementAux, cutlass::float_e4m3_t> or
-      std::is_same_v<ElementAux, cutlass::float_e5m2_t>;
+      cute::is_same_v<ElementAux, cutlass::float_e4m3_t> or
+      cute::is_same_v<ElementAux, cutlass::float_e5m2_t>;
 
   constexpr bool IsReLUAuxNeeded =
-      cute::is_same_v<ActivationFunctor, cutlass::epilogue::thread::ReLu<ElementCompute>> and 
+      (cute::is_same_v<ActivationFunctor, cutlass::epilogue::thread::ReLu<ElementCompute>> or
+       cute::is_same_v<ActivationFunctor, cutlass::epilogue::thread::Clamp<ElementCompute>>) and 
       cute::is_same_v<ElementAux, cutlass::uint1b_t>;
+  constexpr bool IsClamp =
+      cute::is_same_v<ActivationFunctor, cutlass::epilogue::thread::Clamp<ElementCompute>>;
 
   constexpr bool IsBackpropFusion =
       cute::is_same_v<ActivationFunctor, cutlass::epilogue::thread::dGELU<ElementCompute>> or
@@ -276,7 +288,7 @@ void gett_epilogue(
   NumericConverter<ElementCompute, ElementAccumulator> accumulator_converter;
   NumericConverter<ElementCompute, ElementC> source_converter;
   NumericConverter<ElementCompute, ElementBias> bias_converter;
-  NumericConverter<ElementCompute, ElementAux> aux_source_converter;
+  [[maybe_unused]] NumericConverter<ElementCompute, ElementAux> aux_source_converter;
 
   // Scale related converter
   NumericConverter<ElementCompute, ElementScalar> scale_converter;
@@ -317,6 +329,8 @@ void gett_epilogue(
   converted_alpha = mul(converted_alpha, mul(converted_scale_a, converted_scale_b));
   converted_beta = mul(converted_beta, converted_scale_c);
 
+  ElementCompute inter_accum[kBlockM][kBlockN];
+
   for (int m_b = 0; m_b < kBlockM; ++m_b) {
     ElementCompute local_dBias = ElementCompute(0);
 
@@ -331,7 +345,7 @@ void gett_epilogue(
         ElementCompute output = mul(converted_alpha, converted_acc);
 
         if (raw_pointer_cast(epilogue_params.Bias.data()) && not IsBackpropFusion) {
-          ElementCompute converted_bias = bias_converter(epilogue_params.Bias(m + m_b));
+          ElementCompute converted_bias = bias_converter(epilogue_params.Bias(PerColBias ? n + n_b : m + m_b));
           output = bias_op(output, converted_bias);
         }
 
@@ -369,7 +383,12 @@ void gett_epilogue(
             }
           }
 
-          output = activation(output);
+          if constexpr (IsClamp) { // Treat Clamp as ReLU
+            output = activation(output, {0, std::numeric_limits<ElementCompute>::max()});
+          }
+          else {
+            output = activation(output);
+          }
         }
 
         if constexpr (IsScalingAndAmaxOutputNeeded) {
@@ -378,7 +397,7 @@ void gett_epilogue(
           output = epilogue_fma(converted_scale_d, output, ElementCompute(0));
         }
 
-        epilogue_params.D(m + m_b, n + n_b, l) = destination_converter(output);
+        inter_accum[m_b][n_b] = ElementCompute(output);
       }
     } // n_b
 
@@ -390,6 +409,13 @@ void gett_epilogue(
       }
     }
   } // m_b
+  for (int m_b = 0; m_b < kBlockM; ++m_b) {
+    for (int n_b = 0; n_b < kBlockN; ++n_b) {
+      if (m + m_b < cute::size<0>(epilogue_params.D.layout()) && n + n_b < cute::size<1>(epilogue_params.D.layout())) {
+        epilogue_params.D(m + m_b, n + n_b, l) = destination_converter(inter_accum[m_b][n_b]);
+      }
+    }
+  }
 #if defined(_OPENMP)
   #pragma omp critical(Abs_Max_Data_Update)
 #endif
@@ -431,19 +457,19 @@ void Gemm3x(
 {
   using namespace cute;
 
-  static_assert(rank(typename MainloopParams::LayoutA{}) == rank(typename MainloopParams::LayoutB{}));
-  static_assert(rank(typename EpilogueParams::LayoutC{}) == rank(typename EpilogueParams::LayoutD{}));
-  static_assert(rank(typename MainloopParams::LayoutA{}) == rank(typename EpilogueParams::LayoutC{}));
+  static_assert(cute::rank(typename MainloopParams::LayoutA{}) == cute::rank(typename MainloopParams::LayoutB{}));
+  static_assert(cute::rank(typename EpilogueParams::LayoutC{}) == cute::rank(typename EpilogueParams::LayoutD{}));
+  static_assert(cute::rank(typename MainloopParams::LayoutA{}) == cute::rank(typename EpilogueParams::LayoutC{}));
 
-  if constexpr (rank(typename MainloopParams::LayoutA{}) == 2) {
-    Layout layout_A = make_layout_rank3(mainloop_params.A);
-    Layout layout_B = make_layout_rank3(mainloop_params.B);
-    Layout layout_C = make_layout_rank3(epilogue_params.C);
-    Layout layout_D = make_layout_rank3(epilogue_params.D);
-    Layout layout_Aux = make_layout_rank3(epilogue_params.Aux);
-    Layout layout_Bias = make_layout_rank3(epilogue_params.Bias);
-    Layout layout_Valpha = make_layout_rank3(epilogue_params.Valpha);
-    Layout layout_Vbeta = make_layout_rank3(epilogue_params.Vbeta);
+  if constexpr (cute::rank(typename MainloopParams::LayoutA{}) == 2) {
+    cute::Layout layout_A = make_layout_rank3(mainloop_params.A);
+    cute::Layout layout_B = make_layout_rank3(mainloop_params.B);
+    cute::Layout layout_C = make_layout_rank3(epilogue_params.C);
+    cute::Layout layout_D = make_layout_rank3(epilogue_params.D);
+    cute::Layout layout_Aux = make_layout_rank3(epilogue_params.Aux);
+    cute::Layout layout_Bias = make_layout_rank3(epilogue_params.Bias);
+    cute::Layout layout_Valpha = make_layout_rank3(epilogue_params.Valpha);
+    cute::Layout layout_Vbeta = make_layout_rank3(epilogue_params.Vbeta);
     
     auto TensorA = make_tensor(mainloop_params.A.data(), layout_A);
     auto TensorB = make_tensor(mainloop_params.B.data(), layout_B);
