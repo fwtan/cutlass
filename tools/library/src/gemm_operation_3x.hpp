@@ -37,6 +37,8 @@
 #include "cutlass/cutlass.h"
 #include "cutlass/library/library.h"
 #include "library_internal.h"
+#include "cutlass/gemm/dispatch_policy.hpp"
+#include <unordered_map>
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,7 +65,6 @@ public:
   using ElementCompute = typename Operator::EpilogueOutputOp::ElementCompute;
 
 private:
-
   GemmDescription description_;
 
 public:
@@ -215,7 +216,8 @@ protected:
 
   /// Constructs the arguments structure given the configuration and arguments
   static Status update_arguments_(
-      OperatorArguments &operator_args, GemmUniversalArguments const *arguments) {
+      OperatorArguments &operator_args,
+      GemmUniversalArguments const *arguments) {
     Status status = Status::kSuccess;
 
     status = UpdateFusionArgs<decltype(operator_args.epilogue.thread)>::update_(
@@ -261,7 +263,7 @@ protected:
           operator_args.scheduler.raster_order = Enum_t::Heuristic;
       }
     }
-    
+
     return status;
   }
 
@@ -270,7 +272,6 @@ public:
   /// Returns success if the operation can proceed
   Status can_implement(
       void const *configuration_ptr, void const *arguments_ptr) const override {
-
     GemmUniversalConfiguration const *configuration =
       static_cast<GemmUniversalConfiguration const *>(configuration_ptr);
     GemmUniversalArguments const *arguments =
@@ -288,7 +289,6 @@ public:
       configuration->problem_size.n(),
       configuration->problem_size.k(),
       configuration->batch_count);
-
     return Operator::can_implement(args);
   }
 

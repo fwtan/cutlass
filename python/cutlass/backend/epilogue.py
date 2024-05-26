@@ -122,7 +122,7 @@ class LinearCombination(EpilogueFunctorBase):
     :param element_output: data type used to load and store tensors
 
     :param epilogue_vector_length: number of elements computed per operation.
-    Usually it is 128/sizeof_bits<ElementOutput_>, but we use 64 and 32 sometimes
+    Usually it is 128/sizeof_bits_v<ElementOutput_>, but we use 64 and 32 sometimes
     when there are not enough data to store
 
     :param element_accumulator: Accumulator data type
@@ -157,19 +157,41 @@ class LinearCombination(EpilogueFunctorBase):
         c_element_epilogue = dtype2ctype[self.element_epilogue]
         element_epilogue = self.element_epilogue
 
-        class _EpilogueOutputOpParams(ctypes.Structure):
+        class _EpilogueOutputOpParamsEVT(ctypes.Structure):
+            """
+            Epilogue params when using the default linear combination of EVT, which
+            does not currently use {alpha,beta}_ptr_array
+            """
             _fields_ = [
                 ("alpha", c_element_epilogue),
                 ("beta", c_element_epilogue),
                 ("alpha_ptr", ctypes.c_void_p),
-                ("beta_ptr", ctypes.c_void_p)
+                ("beta_ptr", ctypes.c_void_p),
             ]
 
             def __init__(self, alpha, beta, *args) -> None:
                 self.alpha = to_ctype_value(alpha, element_epilogue)
                 self.beta = to_ctype_value(beta, element_epilogue)
 
+        class _EpilogueOutputOpParams(ctypes.Structure):
+            _fields_ = [
+                ("alpha", c_element_epilogue),
+                ("beta", c_element_epilogue),
+                ("alpha_ptr", ctypes.c_void_p),
+                ("beta_ptr", ctypes.c_void_p),
+                ("alpha_ptr_array", ctypes.c_void_p),
+                ("beta_ptr_array", ctypes.c_void_p),
+            ]
+
+            def __init__(self, alpha, beta, *args) -> None:
+                self.alpha = to_ctype_value(alpha, element_epilogue)
+                self.beta = to_ctype_value(beta, element_epilogue)
+
+            def to_evt_params(self) -> _EpilogueOutputOpParamsEVT:
+                return _EpilogueOutputOpParamsEVT(self.alpha, self.beta)
+
         self.epilogue_type = _EpilogueOutputOpParams
+        self.epilogue_type_evt = _EpilogueOutputOpParamsEVT
 
     def emit(self):
         return super().emit(self.tag, self.template_arguments)
@@ -185,7 +207,7 @@ class LinearCombinationClamp(LinearCombination):
     :param element_output: data type used to load and store tensors
 
     :param epilogue_vector_length: number of elements computed per operation.
-    Usually it is 128/sizeof_bits<ElementOutput_>, but we use 64 and 32 sometimes
+    Usually it is 128/sizeof_bits_v<ElementOutput_>, but we use 64 and 32 sometimes
     when there are not enough data to store
 
     :param element_accumulator: Accumulator data type
@@ -238,7 +260,7 @@ class FastLinearCombinationClamp(EpilogueFunctorBase):
     :param element_output: data type used to load and store tensors
 
     :param epilogue_vector_length: number of elements computed per operation.
-    Usually it is 128/sizeof_bits<ElementOutput_>, but we use 64 and 32 sometimes
+    Usually it is 128/sizeof_bits_v<ElementOutput_>, but we use 64 and 32 sometimes
     when there are not enough data to store
     """
 
@@ -288,7 +310,7 @@ class LinearCombinationGeneric(LinearCombination):
     :param element_output: data type used to load and store tensors
 
     :param epilogue_vector_length: number of elements computed per operation.
-    Usually it is 128/sizeof_bits<ElementOutput_>, but we use 64 and 32 sometimes
+    Usually it is 128/sizeof_bits_v<ElementOutput_>, but we use 64 and 32 sometimes
     when there are not enough data to store
 
     :param element_accumulator: Accumulator data type

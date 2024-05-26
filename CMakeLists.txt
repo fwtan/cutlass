@@ -38,9 +38,27 @@ else()
 endif()
 
 message(STATUS "CMake Version: ${CMAKE_VERSION}")
-set(IMPLICIT_CMAKE_CXX_STANDARD OFF CACHE BOOL "Do not explicitly specify -std=c++11 if set")
+set(IMPLICIT_CMAKE_CXX_STANDARD OFF CACHE BOOL "Do not explicitly specify -std=c++17 if set")
 
-project(CUTLASS VERSION 3.4.0 LANGUAGES CXX)
+# To reduce duplicate version locations, parse the version out of the
+# main versions.h file and reuse it here.
+
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/include/cutlass/version.h VERSION_FILE_CONTENTS)
+string(REGEX MATCH "#define CUTLASS_MAJOR ([0-9]+)" _CUTLASS_VERSION_MAJOR "${VERSION_FILE_CONTENTS}")
+set(_CUTLASS_VERSION_MAJOR ${CMAKE_MATCH_1})
+string(REGEX MATCH "#define CUTLASS_MINOR ([0-9]+)" _CUTLASS_VERSION_MINOR "${VERSION_FILE_CONTENTS}")
+set(_CUTLASS_VERSION_MINOR ${CMAKE_MATCH_1})
+string(REGEX MATCH "#define CUTLASS_PATCH ([0-9]+)" _CUTLASS_VERSION_PATCH "${VERSION_FILE_CONTENTS}")
+set(_CUTLASS_VERSION_PATCH ${CMAKE_MATCH_1})
+
+message(STATUS "CUTLASS ${_CUTLASS_VERSION_MAJOR}.${_CUTLASS_VERSION_MINOR}.${_CUTLASS_VERSION_PATCH}")
+
+## CUTLASS PROJECT #############################################################
+
+project(CUTLASS VERSION ${_CUTLASS_VERSION_MAJOR}.${_CUTLASS_VERSION_MINOR}.${_CUTLASS_VERSION_PATCH} LANGUAGES CXX)
+
+################################################################################
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/CUDA.cmake)
 
 if (CUDA_VERSION VERSION_LESS 11.3)
@@ -49,14 +67,13 @@ elseif (CUDA_VERSION VERSION_LESS 11.4)
   message(WARNING "CUTLASS ${CUTLASS_VERSION} support for CUDA ${CUDA_VERSION} is deprecated, please use CUDA 11.8 or higher.")
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.5)
-  message(FATAL_ERROR "GCC version must be at least 7.5!")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.3)
+  message(FATAL_ERROR "GCC version must be at least 7.3!")
 endif()
 
 if (CUDA_COMPILER MATCHES "[Cc]lang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0)
   message(FATAL_ERROR "Clang 7.0+ required for GPU compilation")
 endif()
-
 find_package(Doxygen QUIET)
 
 ################################################################################
@@ -150,6 +167,7 @@ endif()
 include(GNUInstallDirs)
 
 link_directories(${CUDA_TOOLKIT_ROOT_DIR}/lib64/stubs)
+link_directories(${CUDA_TOOLKIT_ROOT_DIR}/lib64)
 
 ###################################################################################################
 #
@@ -177,6 +195,9 @@ if(WIN32)
   # On Windows we link against the shared (DLL) runtime. Change gtest settings to match this.
   set(gtest_force_shared_crt ON CACHE BOOL "Use shared (DLL) run-time lib even when Google Test is built as static lib" FORCE)
 endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCUTLASS_VERSIONS_GENERATED")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DCUTLASS_VERSIONS_GENERATED")
 
 if (WIN32)
   # Enable more warnings.  Add "-Xcompiler=/WX" to enable warnings as errors.
@@ -311,6 +332,18 @@ endif()
 
 
 
+# Warnings-as-error exceptions and warning suppressions for Clang builds
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=implicit-int-conversion ")
+  list(APPEND CUTLASS_CUDA_NVCC_FLAGS "-Wno-error=implicit-int-conversion" )
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=pass-failed ")
+  list(APPEND CUTLASS_CUDA_NVCC_FLAGS "-Wno-error=pass-failed" )
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=inconsistent-missing-override ")
+  list(APPEND CUTLASS_CUDA_NVCC_FLAGS "-Wno-error=inconsistent-missing-override" )
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-sign-conversion ")
+  list(APPEND CUTLASS_CUDA_NVCC_FLAGS "-Wno-sign-conversion" )
+endif()
+
 if (NOT MSVC AND CUTLASS_NVCC_KEEP)
   # MSVC flow handles caching already, but for other generators we handle it here.
   set(CUTLASS_NVCC_KEEP_DIR ${CMAKE_CURRENT_BINARY_DIR}/tmp CACHE PATH "Location to store NVCC scratch files")
@@ -336,6 +369,7 @@ if (CUTLASS_ENABLE_OPENMP_TESTS)
     message(WARNING "CUTLASS_ENABLE_OPENMP_TESTS set but OpenMP not found.")
   endif()
 endif()
+
 if(UNIX)
   list(APPEND CUTLASS_CUDA_NVCC_FLAGS -Xcompiler=-Wconversion)
   list(APPEND CUTLASS_CUDA_NVCC_FLAGS -Xcompiler=-fno-strict-aliasing)
@@ -589,8 +623,8 @@ if (NOT DEFINED CUTLASS_REVISION)
 endif()
 
 configure_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in
-  ${CMAKE_CURRENT_BINARY_DIR}/include/cutlass/version.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_extended.h.in
+  ${CMAKE_CURRENT_BINARY_DIR}/include/cutlass/version_extended.h
   @ONLY)
 
 target_include_directories(

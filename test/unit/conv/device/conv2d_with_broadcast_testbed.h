@@ -254,7 +254,7 @@ public:
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Conv2d::UnderlyingKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Conv2d::UnderlyingKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -404,15 +404,15 @@ public:
 
     // compute tensor Z and tensor T
     for (int n = 0; n < problem_size.N; ++n) {
-      for (int p = 0; p < problem_size.P; ++p) {
-        for (int q = 0; q < problem_size.Q; ++q) {
-          for (int k = 0; k < problem_size.K; ++k) {
+      for (int p = 0; p < (kConvolutionalOperator == cutlass::conv::Operator::kFprop ? problem_size.P : problem_size.H); ++p) {
+        for (int q = 0; q < (kConvolutionalOperator == cutlass::conv::Operator::kFprop ? problem_size.Q : problem_size.W); ++q) {
+          for (int k = 0; k < (kConvolutionalOperator == cutlass::conv::Operator::kFprop ? problem_size.K : problem_size.C); ++k) {
   
-            ElementZ z;
-            ElementT t;
+            ElementZ z{};
+            ElementT t{};
     
             ElementCompute accum = tensor_Y_reference.at({n, p, q, k});
-	    ElementCompute bias = ElementCompute(tensor_Broadcast.at({0, 0, 0, k}));
+	          ElementCompute bias = ElementCompute(tensor_Broadcast.at({0, 0, 0, k}));
 
 
             if (kAddBroadcastFirst) {
@@ -449,7 +449,8 @@ public:
       fname << "error_Conv2d_ImplicitGemm_device_"
         << (split_k_mode == cutlass::conv::SplitKMode::kSerial ? "serial_reduction_" : "parallel_reduction_")
         << (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kFprop ? "fprop_" :
-            (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ? "dgrad_" : "wgrad_")) 
+            (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ? "dgrad_" :
+              (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDeconv ? "deconv_" : "wgrad_")))
         << "nhwc_"
         << problem_size.N << "x"
         << problem_size.H << "x"
@@ -498,6 +499,52 @@ public:
     return passed;
   }
 };
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template <typename ImplicitGemm,
+          typename ReferenceOp = Conv2dWithBroadcastReferenceOp<ImplicitGemm>,
+          bool AddBroadcastFirst = false>
+bool TestSpecificConv2dWithBroadcast(
+  const Conv2dProblemVector & problem_sizes) {
+
+  bool passed = true;
+
+  //
+  // Testbed object
+  //
+
+  TestbedConv2dWithBroadcast<ImplicitGemm, ReferenceOp, AddBroadcastFirst> testbed;
+
+  // Sweep conv2d problem sizes (split-k-mode=kSerial, split-k-slice=1, alpha=1.0, beta=0.0)
+  for(auto conv_problem : problem_sizes) {
+
+    //
+    // Test
+    //
+
+    // test mode = xcross
+    passed = testbed.run(
+      conv_problem,
+      cutlass::conv::SplitKMode::kSerial);
+
+    if (!passed) {
+      return false;
+    }
+
+    // test mode = convolution
+    passed = testbed.run(
+      conv_problem.reset_mode(cutlass::conv::Mode::kConvolution),
+      cutlass::conv::SplitKMode::kSerial);
+
+    if (!passed) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TestAllConv: Runs cutlass::conv::device::ImplicitGemmConvolution operator and compares it with reference
@@ -556,8 +603,8 @@ bool TestAllConv2dWithBroadcast(
       //
   
       // CUTLASS DGRAD's *unity* stride specialization only support stride {1, 1} 
-      if ((ImplicitGemm::kConvolutionalOperator == 
-            cutlass::conv::Operator::kDgrad) && 
+      if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+            ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) && 
           (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
             cutlass::conv::StrideSupport::kUnity)) {
         if (!((conv_problem.stride_h == 1) && (conv_problem.stride_w == 1))) {
@@ -567,8 +614,8 @@ bool TestAllConv2dWithBroadcast(
 
 #if 0 // relax restrictions on analytic strided dgrad
       // CUTLASS DGRAD's *strided* specialization only support stride >= {2, 2} 
-      if ((ImplicitGemm::kConvolutionalOperator == 
-            cutlass::conv::Operator::kDgrad) && 
+      if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+            ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) && 
           (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
             cutlass::conv::StrideSupport::kStrided)) {
          if (((conv_problem.stride_h == 1) && (conv_problem.stride_w == 1))) {
@@ -604,8 +651,8 @@ bool TestAllConv2dWithBroadcast(
   }
 
   // CUTLASS DGRAD's *strided* specialization does not support split-k mode 
-  if ((ImplicitGemm::kConvolutionalOperator == 
-          cutlass::conv::Operator::kDgrad) && 
+  if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+        ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) && 
       (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
         cutlass::conv::StrideSupport::kStrided)) {
 

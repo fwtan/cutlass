@@ -178,6 +178,16 @@ struct ComposedLayout : private cute::tuple<LayoutA, Offset, LayoutB>  // EBO fo
   tile(Layouts const&... layouts) const {
     return tiled_divide(*this, make_tile(layouts...));
   }
+
+  // Equality, return a static or dynamic boolean
+  template <class... Args>
+  CUTE_HOST_DEVICE constexpr
+  auto
+  operator==(ComposedLayout<Args...> const& other) const {
+    return this->layout_a() == other.layout_a() &&
+           this->layout_b() == other.layout_b() &&
+           this->offset()   == other.offset();
+  }
 };
 
 template <class A, class O, class B>
@@ -382,12 +392,12 @@ composition(Layout<ShapeA,StrideA> const& a,
 // complement
 //
 
-template <class A, class O, class B, class CoSizeHi>
+template <class A, class O, class B, class CoTarget>
 CUTE_HOST_DEVICE constexpr
 auto
-complement(ComposedLayout<A,O,B> const& layout, CoSizeHi const& cosize_hi)
+complement(ComposedLayout<A,O,B> const& layout, CoTarget const& cotarget)
 {
-  return complement(layout.layout_b(), cosize_hi);
+  return complement(layout.layout_b(), cotarget);
 }
 
 template <class A, class O, class B>
@@ -600,7 +610,7 @@ recast_layout(ComposedLayout<A,O,B> const& layout)
   else if constexpr (scale::num == 1) {
     return downcast<scale::den>(layout);
   }
-  else if constexpr (scale::den == 1) { 
+  else if constexpr (scale::den == 1) {
     return upcast<scale::num>(layout);
   }
   else {

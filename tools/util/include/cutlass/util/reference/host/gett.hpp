@@ -35,10 +35,11 @@
 #pragma once
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-
+#include "cutlass/gemm/gemm.h"
 #include "cutlass/complex.h"
 #include "cutlass/numeric_conversion.h"
 #include "cutlass/epilogue/thread/activation.h"
+#include "cutlass/relatively_equal.h"
 
 #include "cute/tensor.hpp"
 
@@ -115,7 +116,6 @@ struct GettEpilogueParams {
   using LayoutC = typename TensorC::layout_type;
   using EngineD =  typename TensorD::engine_type;
   using LayoutD = typename TensorD::layout_type;
-
   static constexpr bool PerColumnBias = PerColumnBias_;
 
   ElementScalar alpha = ElementScalar(1);
@@ -236,6 +236,7 @@ void gett_mainloop(
         acc[m_b][n_b] = fma_op(a_frag[m_b], b_frag[n_b], acc[m_b][n_b]);
       }
     }
+
   }
 }
 

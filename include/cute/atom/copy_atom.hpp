@@ -81,7 +81,7 @@ struct Copy_Atom<Copy_Traits<Args...>, CopyInternalType>
   CUTE_HOST_DEVICE
   auto
   with(TraitsArgs&&... args) const {
-    auto traits = Traits::with(std::forward<TraitsArgs>(args)...);
+    auto traits = Traits::with(static_cast<TraitsArgs&&>(args)...);
     return Copy_Atom<decltype(traits), CopyInternalType>{traits};
   }
 
@@ -351,7 +351,7 @@ struct ThrCopy
   partition_S(STensor&& stensor) const {
     //static_assert(sizeof(typename remove_cvref_t<STensor>::value_type) == sizeof(typename TiledCopy::ValType),
     //              "Expected ValType for tiling SrcTensor.");
-    auto thr_tensor = make_tensor(std::forward<STensor>(stensor).data(), TiledCopy::tidfrg_S(stensor.layout()));
+    auto thr_tensor = make_tensor(static_cast<STensor&&>(stensor).data(), TiledCopy::tidfrg_S(stensor.layout()));
     return thr_tensor(thr_idx_, _, repeat<rank_v<STensor>>(_));
   }
 
@@ -361,7 +361,7 @@ struct ThrCopy
   partition_D(DTensor&& dtensor) const {
     //static_assert(sizeof(typename remove_cvref_t<DTensor>::value_type) == sizeof(typename TiledCopy::ValType),
     //              "Expected ValType for tiling DstTensor.");
-    auto thr_tensor = make_tensor(std::forward<DTensor>(dtensor).data(), TiledCopy::tidfrg_D(dtensor.layout()));
+    auto thr_tensor = make_tensor(static_cast<DTensor&&>(dtensor).data(), TiledCopy::tidfrg_D(dtensor.layout()));
     return thr_tensor(thr_idx_, _, repeat<rank_v<DTensor>>(_));
   }
 
@@ -371,7 +371,7 @@ struct ThrCopy
   retile_S(STensor&& stensor) {
     // static_assert(sizeof(typename remove_cvref_t<STensor>::value_type) == sizeof(typename TiledCopy::ValType),
     //               "Expected ValType for tiling SrcTensor.");
-    return make_tensor(std::forward<STensor>(stensor).data(), TiledCopy::retile(stensor.layout()));
+    return make_tensor(static_cast<STensor&&>(stensor).data(), TiledCopy::retile(stensor.layout()));
   }
 
   template <class DTensor>
@@ -380,7 +380,7 @@ struct ThrCopy
   retile_D(DTensor&& dtensor) {
     // static_assert(sizeof(typename remove_cvref_t<DTensor>::value_type) == sizeof(typename TiledCopy::ValType),
     //               "Expected ValType for tiling DstTensor.");
-    return make_tensor(std::forward<DTensor>(dtensor).data(), TiledCopy::retile(dtensor.layout()));
+    return make_tensor(static_cast<DTensor&&>(dtensor).data(), TiledCopy::retile(dtensor.layout()));
   }
 };
 
@@ -599,7 +599,7 @@ CUTE_HOST_DEVICE constexpr
 auto
 tile_size(TiledCopy<Args...> const&)
 {
-  return size<I...>(typename TiledCopy<Args...>::TiledShape_MN{});
+  return size<I...>(typename TiledCopy<Args...>::Tiler_MN{});
 }
 
 // The number of threads involved in a TiledCopy
@@ -756,6 +756,7 @@ print_latex_copy(LayoutS const& S, ThrIDS const& TS,  // (m,n) -> (tid,vid)  and
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#include <cute/atom/copy_traits_sm50.hpp>
 #include <cute/atom/copy_traits_sm75.hpp>
 #include <cute/atom/copy_traits_sm80.hpp>
 #include <cute/atom/copy_traits_sm90.hpp>

@@ -150,7 +150,12 @@ struct PipelineState {
   }
 
   CUTLASS_DEVICE
-  PipelineState& operator=(const PipelineState& other) {
+  PipelineState& operator+=(uint32_t num_iterations) {
+    return advance(num_iterations);
+  }
+
+  CUTLASS_DEVICE
+  PipelineState& operator=(PipelineState const& other) {
     index_ = other.index();
     phase_ = other.phase();
     count_ = other.count();
@@ -158,7 +163,7 @@ struct PipelineState {
   }
 
   CUTLASS_DEVICE
-  PipelineState advance(uint32_t num_iterations) {
+  PipelineState& advance(uint32_t num_iterations) {
     if constexpr (Stages > 0) {
       // Number of iterations cross over the stage boundary => flipped phase
       if ((num_iterations < Stages) && (index_ + num_iterations) >= Stages ) {
@@ -181,7 +186,7 @@ struct PipelineState {
   }
 };
 
-template<class Pipeline>  
+template<class Pipeline>
 CUTLASS_DEVICE
 PipelineState<Pipeline::Stages> make_producer_start_state() {
   // Producer starts with an opposite phase as the buffers are initially empty
@@ -259,7 +264,6 @@ public :
     dim3 block_id = cute::block_id_in_cluster();
     auto cluster_size = cute::size(cluster_shape);
     static constexpr int MaxClusterSize = 16;
-    static_assert(cluster_size <= MaxClusterSize, "ERROR : Cluster size too large !" );
 
     // STEP 1 : Use Cute Layout function to generate an optimal dst block-id (0-15)
     if (params_.num_consumers % NumThreadsPerWarpGroup == 0) {
@@ -290,7 +294,7 @@ public :
     is_signalling_thread_ &= dst_blockid_ < cluster_size;
     is_signalling_thread_ &= is_same_row_or_col(dst_blockid_, block_id, cluster_shape);
   }
-  
+
   template <typename ClusterShape>
   CUTLASS_DEVICE
   bool is_same_row_or_col(int dst_block_id, dim3 block_id, ClusterShape cluster_shape) {
@@ -306,7 +310,7 @@ public :
   // Four member functions are always used in pairs:
   //
   // * producer_try_acquire and producer_acquire, and
-  // * consumer_try_wait and consumer_wait. 
+  // * consumer_try_wait and consumer_wait.
   //
   // The two functions with "try" in their names are called "try" functions,
   // and the other two are conceptually "finalize" functions.
@@ -340,7 +344,7 @@ public :
   CUTLASS_DEVICE
   void producer_tail(PipelineState state) {
     for (int count = 0; count < Stages; ++count) {
-      producer_acquire(state, {BarrierStatus::WaitOnly});  
+      producer_acquire(state, {BarrierStatus::WaitOnly});
       ++state;
     }
   }
@@ -362,7 +366,7 @@ public :
   ConsumerToken consumer_test_wait(PipelineState state, uint32_t skip_wait = false) {
     return consumer_test_wait(state.index(), state.phase(), skip_wait);
   }
-  
+
   CUTLASS_DEVICE
   void consumer_wait(PipelineState state) {
     consumer_wait(state.index(), state.phase());
@@ -464,7 +468,7 @@ private :
     uint32_t barrier_status = full_barrier_ptr_[stage].test_wait(phase);
     return {static_cast<BarrierStatus>(barrier_status)};
   }
-  
+
   // Wait for producer to commit transactions (done by TMA)
   CUTLASS_DEVICE
   void consumer_wait(uint32_t stage, uint32_t phase) {
@@ -675,7 +679,7 @@ public :
   // Four member functions are always used in pairs:
   //
   // * producer_try_acquire and producer_acquire, and
-  // * consumer_try_wait and consumer_wait. 
+  // * consumer_try_wait and consumer_wait.
   //
   // The two functions with "try" in their names are called "try" functions,
   // and the other two are conceptually "finalize" functions.
@@ -714,7 +718,7 @@ public :
   CUTLASS_DEVICE
   void producer_tail(PipelineState state) {
     for (int count = 0; count < Stages; ++count) {
-      producer_acquire(state);  
+      producer_acquire(state);
       ++state;
     }
   }
@@ -736,7 +740,7 @@ public :
   ConsumerToken consumer_test_wait(PipelineState state, uint32_t skip_wait = false) {
     return consumer_test_wait(state.index(), state.phase(), skip_wait);
   }
-  
+
   CUTLASS_DEVICE
   void consumer_wait(PipelineState state, ConsumerToken barrier_token = {BarrierStatus::WaitAgain}) {
     consumer_wait(state.index(), state.phase(), barrier_token);
@@ -801,7 +805,7 @@ private:
     uint32_t barrier_status = full_barrier_ptr_[stage].test_wait(phase);
     return {static_cast<BarrierStatus>(barrier_status)};
   }
-  
+
   CUTLASS_DEVICE
   void consumer_wait(uint32_t stage, uint32_t phase, ConsumerToken barrier_token) {
     if (barrier_token == BarrierStatus::WaitAgain) {
@@ -883,7 +887,7 @@ public :
   // Four member functions are always used in pairs:
   //
   // * producer_try_acquire and producer_acquire, and
-  // * consumer_try_wait and consumer_wait. 
+  // * consumer_try_wait and consumer_wait.
   //
   // The two functions with "try" in their names are called "try" functions,
   // and the other two are conceptually "finalize" functions.
@@ -923,7 +927,7 @@ public :
   CUTLASS_DEVICE
   void producer_tail(PipelineState state) {
     for (int count = 0; count < Stages; ++count) {
-      producer_acquire(state);  
+      producer_acquire(state);
       ++state;
     }
   }
@@ -945,7 +949,7 @@ public :
   ConsumerToken consumer_test_wait(PipelineState state, uint32_t skip_wait = false) {
     return consumer_test_wait(state.index(), state.phase(), skip_wait);
   }
-  
+
   CUTLASS_DEVICE
   void consumer_wait(PipelineState state, ConsumerToken barrier_token = {BarrierStatus::WaitAgain}) {
     consumer_wait(state.index(), state.phase(), barrier_token);
@@ -1004,7 +1008,7 @@ private:
     uint32_t barrier_status = full_barrier_ptr_[stage].test_wait(phase);
     return {static_cast<BarrierStatus>(barrier_status)};
   }
-  
+
   CUTLASS_DEVICE
   void consumer_wait(uint32_t stage, uint32_t phase) {
     uint32_t done = full_barrier_ptr_[stage].test_wait(phase);

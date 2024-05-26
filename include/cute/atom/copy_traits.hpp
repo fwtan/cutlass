@@ -92,21 +92,6 @@ struct Copy_Traits<AutoVectorizingCopyWithAssumedAlignment<MaxVecBits>>
   using RefLayout = SrcLayout;
 };
 
-namespace detail {
-
-template <class Operation,
-          class PtrS, int... Is,
-          class PtrD, int... Id>
-CUTE_HOST_DEVICE constexpr
-void
-copy_explode(PtrS&& s, int_sequence<Is...>,
-             PtrD&& d, int_sequence<Id...>)
-{
-  return Operation::copy(s[Is]..., d[Id]...);
-}
-
-} // end namespace detail
-
 //
 // Generic copy_unpack for common argument-based Copy_Traits
 //
@@ -139,8 +124,9 @@ copy_unpack(Copy_Traits<CopyOp,Args...> const&,
   CUTE_STATIC_ASSERT_V(size(rD) == Int<RegNumDst>{},
     "Copy_Traits: dst failed to vectorize into registers. Layout is incompatible with this CopyOp.");
 
-  detail::copy_explode<CopyOp>(rS, make_int_sequence<RegNumSrc>{},
-                               rD, make_int_sequence<RegNumDst>{});
+  detail::explode(detail::CallCOPY<CopyOp>{},
+                  rS, make_int_sequence<RegNumSrc>{},
+                  rD, make_int_sequence<RegNumDst>{});
 }
 
 //

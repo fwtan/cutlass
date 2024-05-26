@@ -422,6 +422,8 @@ Status from_string<Status>(std::string const &str) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 static struct {
   char const *text;
   char const *pretty;
@@ -1202,7 +1204,7 @@ std::string lexical_cast(int64_t int_value) {
 /// Lexical cast TO a string FROM a byte array. Returns true if cast is successful or false if invalid.
 std::string lexical_cast(std::vector<uint8_t> &bytes, NumericTypeID type) {
 
-  int size_bytes = sizeof_bits(type) / 8;
+  size_t size_bytes = sizeof_bits(type) / 8;
 
   if (!size_bytes || size_bytes != bytes.size()) {
     return "<invalid>";

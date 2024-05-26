@@ -153,7 +153,6 @@ public:
     else if (dist_kind == cutlass::Distribution::Identity) {
 
       cutlass::reference::host::TensorFillIdentity(view);
-
     } 
     else if (dist_kind == cutlass::Distribution::Gaussian) {
 
@@ -192,7 +191,7 @@ public:
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Conv2d::UnderlyingKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Conv2d::UnderlyingKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -489,7 +488,8 @@ public:
       fname << "error_Conv2d_ImplicitGemm_device_"
         << (split_k_mode == cutlass::conv::SplitKMode::kSerial ? "serial_reduction_" : "parallel_reduction_")
         << (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kFprop ? "fprop_" :
-            (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ? "dgrad_" : "wgrad_"))
+            (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ? "dgrad_" :
+              (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDeconv ? "deconv_" : "wgrad_")))
         << ss_problem_size_text.str()
         << Conv2d::ThreadblockShape::kM << "x"  
         << Conv2d::ThreadblockShape::kN << "x"  
@@ -635,8 +635,8 @@ bool TestAllConv2d(
     //
   
     // CUTLASS DGRAD's *unity* stride specialization only support stride {1, 1} 
-    if ((ImplicitGemm::kConvolutionalOperator == 
-          cutlass::conv::Operator::kDgrad) && 
+    if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+          ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) &&
         (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
           cutlass::conv::StrideSupport::kUnity)) {
       if (!((conv_problem.stride_h == 1) && (conv_problem.stride_w == 1))) {
@@ -663,8 +663,8 @@ bool TestAllConv2d(
     // CUTLASS DGRAD's *strided* stride specialization supports all stride {stride_h, stride_w} 
     // Although strided dgrad works for all stride combinations, we are only going 
     // to run strided dgrad for non-unity strides 
-    if ((ImplicitGemm::kConvolutionalOperator == 
-          cutlass::conv::Operator::kDgrad) && 
+    if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+          ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) &&
         (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
           cutlass::conv::StrideSupport::kStrided)) {
        if (((conv_problem.stride_h == 1) && (conv_problem.stride_w == 1))) {
@@ -718,8 +718,8 @@ bool TestAllConv2d(
   }
 
   // CUTLASS DGRAD's *strided* specialization does not support split-k mode 
-  if ((ImplicitGemm::kConvolutionalOperator == 
-          cutlass::conv::Operator::kDgrad) && 
+    if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+          ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) &&
       (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
         cutlass::conv::StrideSupport::kStrided)) {
 

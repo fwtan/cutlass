@@ -28,15 +28,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
-/*
-  Note:  CUTLASS 3x increases the host compiler requirements to C++17. However, certain
-         existing integrations of CUTLASS require C++11 host compilers.
-
-         Until this requirement can be lifted, certain headers with this annotation are required
-         to be remain consistent with C++11 syntax.
-
-         C++11 compatibility is enforced by `cutlass_test_unit_core_cpp11`.
-*/
 
 #pragma once
 
@@ -153,13 +144,15 @@ struct divide_assert {
  * Round dividend up to the nearest multiple of divisor
  */
 template <typename dividend_t, typename divisor_t>
-CUTLASS_HOST_DEVICE dividend_t round_nearest(dividend_t dividend, divisor_t divisor) {
+CUTLASS_HOST_DEVICE
+CUTLASS_CONSTEXPR_IF_CXX17
+dividend_t round_nearest(dividend_t dividend, divisor_t divisor) {
   return ((dividend + divisor - 1) / divisor) * divisor;
 }
 
 template <typename value_t>
 CUTLASS_HOST_DEVICE
-constexpr
+CUTLASS_CONSTEXPR_IF_CXX17
 value_t abs_for_integer(value_t a) {
   return ((a > 0) ? a : -a);
 }
@@ -185,9 +178,8 @@ template <typename value_t>
 CUTLASS_HOST_DEVICE
 CUTLASS_CONSTEXPR_IF_CXX17
 value_t lcm(value_t a, value_t b) {
-  value_t temp = gcd(a, b);
-
-  return temp ? (cutlass::abs_for_integer(a) / temp * cutlass::abs_for_integer(b)) : value_t();
+  value_t temp = cutlass::gcd(a, b);
+  return (temp != 0) ? value_t(cutlass::abs_for_integer(a) / temp * cutlass::abs_for_integer(b)) : value_t{};
 }
 
 /**
@@ -195,9 +187,9 @@ value_t lcm(value_t a, value_t b) {
  */
 template <typename value_t>
 CUTLASS_HOST_DEVICE
-constexpr
+CUTLASS_CONSTEXPR_IF_CXX17
 value_t gcd_cxx11(value_t a, value_t b) {
-  return (a == 0 || b == 0) ? cutlass::abs_for_integer(a | b) : gcd_cxx11(b, a % b);
+  return (a == 0 || b == 0) ? cutlass::abs_for_integer(a | b) : cutlass::gcd_cxx11(b, a % b);
 }
 
 /**
@@ -205,11 +197,11 @@ value_t gcd_cxx11(value_t a, value_t b) {
  */
 template <typename value_t>
 CUTLASS_HOST_DEVICE
-constexpr
+CUTLASS_CONSTEXPR_IF_CXX17
 value_t lcm_cxx11(value_t a, value_t b) {
-  return gcd_cxx11(a, b) ? (cutlass::abs_for_integer(a) / gcd_cxx11(a, b) *
-                            cutlass::abs_for_integer(b))
-                         : value_t();
+  return cutlass::gcd_cxx11(a, b) ? (cutlass::abs_for_integer(a) / cutlass::gcd_cxx11(a, b) *
+                                    cutlass::abs_for_integer(b))
+                                  : value_t{};
 }
 
 /// Returns the smallest value in the half-open range [a, a+b) that is a multiple of b
@@ -234,16 +226,20 @@ int ceil_div(int a, int b) {
  * log2_up/down codes?
  */
 template <typename value_t>
-CUTLASS_HOST_DEVICE value_t clz(value_t x) {
+CUTLASS_HOST_DEVICE
+CUTLASS_CONSTEXPR_IF_CXX17
+value_t clz(value_t x) {
   for (int i = 31; i >= 0; --i) {
     if ((1 << i) & x)
       return value_t(31 - i);
   }
-  return 32;
+  return value_t(32);
 }
 
 template <typename value_t>
-CUTLASS_HOST_DEVICE value_t find_log2(value_t x) {
+CUTLASS_HOST_DEVICE
+CUTLASS_CONSTEXPR_IF_CXX17
+value_t find_log2(value_t x) {
   int a = int(31 - clz(x));
   a += (x & (x - 1)) != 0;  // Round up, add 1 if not a power of 2.
   return a;
@@ -253,7 +249,8 @@ CUTLASS_HOST_DEVICE value_t find_log2(value_t x) {
 /**
  * Find divisor, using find_log2
  */
-CUTLASS_HOST_DEVICE 
+CUTLASS_HOST_DEVICE
+CUTLASS_CONSTEXPR_IF_CXX17
 void find_divisor(unsigned int& mul, unsigned int& shr, unsigned int denom) {
   if (denom == 1) {
     mul = 0;
@@ -270,7 +267,8 @@ void find_divisor(unsigned int& mul, unsigned int& shr, unsigned int denom) {
 /**
  * Find quotient and remainder using device-side intrinsics
  */
-CUTLASS_HOST_DEVICE 
+CUTLASS_HOST_DEVICE
+CUTLASS_CONSTEXPR_IF_CXX17
 void fast_divmod(int& quo, int& rem, int src, int div, unsigned int mul, unsigned int shr) {
 
   #if defined(__CUDA_ARCH__)
@@ -286,6 +284,7 @@ void fast_divmod(int& quo, int& rem, int src, int div, unsigned int mul, unsigne
 
 // For long int input
 CUTLASS_HOST_DEVICE
+CUTLASS_CONSTEXPR_IF_CXX17
 void fast_divmod(int& quo, int64_t& rem, int64_t src, int div, unsigned int mul, unsigned int shr) {
 
   #if defined(__CUDA_ARCH__)
