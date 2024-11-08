@@ -162,6 +162,31 @@ struct DefaultIteratorsTensorOp<int32_t, int32_t, ElementsPerAccess, Threadblock
   static int const kFragmentsPerIteration = 1;
 };
 
+/// Partial specialization for int16_t <= int32_t
+template <
+  int ElementsPerAccess,
+  typename ThreadblockShape,
+  typename WarpShape,
+  typename InstructionShape,
+  typename ThreadMap
+>
+struct DefaultIteratorsTensorOp<int16_t, int32_t, ElementsPerAccess, ThreadblockShape, WarpShape, InstructionShape, ThreadMap> {
+  
+  using WarpTileIterator = cutlass::epilogue::warp::TileIteratorTensorOp<
+    WarpShape,
+    InstructionShape,
+    int32_t,
+    layout::RowMajor
+  >;
+
+  using SharedLoadIterator = cutlass::epilogue::threadblock::SharedLoadIterator<
+    ThreadMap,
+    int32_t
+  >;
+
+  static int const kFragmentsPerIteration = 1;
+};
+
 /// Partial specialization for float <= int32_t
 template <
   int ElementsPerAccess,
